@@ -20,6 +20,10 @@ type mockRacesRepo struct {
 	lastOpts db.ListRacesOptions
 	races    []*racing.Race
 	listErr  error
+
+	lastGetID int64
+	getRace   *racing.Race
+	getErr    error
 }
 
 func (m *mockRacesRepo) Init() error { return nil }
@@ -27,6 +31,11 @@ func (m *mockRacesRepo) Init() error { return nil }
 func (m *mockRacesRepo) List(ctx context.Context, opts db.ListRacesOptions) ([]*racing.Race, error) {
 	m.lastOpts = opts
 	return m.races, m.listErr
+}
+
+func (m *mockRacesRepo) Get(ctx context.Context, id int64) (*racing.Race, error) {
+	m.lastGetID = id
+	return m.getRace, m.getErr
 }
 
 func TestListRaces_PassesFilterFieldsThroughToRepo(t *testing.T) {
@@ -70,6 +79,40 @@ func TestListRaces_WrapsRepoErrorAsInternal(t *testing.T) {
 	svc := NewRacingService(repo)
 
 	_, err := svc.ListRaces(context.Background(), &racing.ListRacesRequest{})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.Internal, st.Code())
+}
+
+func TestGetRace_ReturnsRaceOnSuccess(t *testing.T) {
+	repo := &mockRacesRepo{getRace: &racing.Race{Id: 42, Name: "Test"}}
+	svc := NewRacingService(repo)
+
+	race, err := svc.GetRace(context.Background(), &racing.GetRaceRequest{Id: 42})
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), race.Id)
+	assert.Equal(t, int64(42), repo.lastGetID)
+}
+
+func TestGetRace_MapsSentinelToNotFound(t *testing.T) {
+	// The key correctness property: ErrRaceNotFound -> codes.NotFound.
+	repo := &mockRacesRepo{getErr: db.ErrRaceNotFound}
+	svc := NewRacingService(repo)
+
+	_, err := svc.GetRace(context.Background(), &racing.GetRaceRequest{Id: 1})
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.NotFound, st.Code())
+}
+
+func TestGetRace_MapsOtherErrorsToInternal(t *testing.T) {
+	// A DB outage must NOT be reported as 404.
+	repo := &mockRacesRepo{getErr: errors.New("connection refused")}
+	svc := NewRacingService(repo)
+
+	_, err := svc.GetRace(context.Background(), &racing.GetRaceRequest{Id: 1})
 	require.Error(t, err)
 	st, ok := status.FromError(err)
 	require.True(t, ok)

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,11 @@ import (
 	"git.neds.sh/matty/entain/racing/proto/racing"
 )
 
+// ErrRaceNotFound is returned by Get when no race matches the requested ID.
+// Callers MUST use errors.Is to distinguish this sentinel from infrastructure errors;
+// the service layer maps ErrRaceNotFound -> codes.NotFound and everything else -> codes.Internal.
+var ErrRaceNotFound = errors.New("race not found")
+
 // RacesRepo provides repository access to races.
 type RacesRepo interface {
 	// Init will initialise our races repository.
@@ -20,6 +26,9 @@ type RacesRepo interface {
 
 	// List will return a list of races.
 	List(ctx context.Context, opts ListRacesOptions) ([]*racing.Race, error)
+
+	// Get returns a single race by ID, or ErrRaceNotFound if it does not exist.
+	Get(ctx context.Context, id int64) (*racing.Race, error)
 }
 
 // ListRacesOptions is the pre-validated, transport-agnostic query input for List.
@@ -78,6 +87,26 @@ func (r *racesRepo) List(ctx context.Context, opts ListRacesOptions) ([]*racing.
 		return nil, err
 	}
 	return races, nil
+}
+
+func (r *racesRepo) Get(ctx context.Context, id int64) (*racing.Race, error) {
+	rows, err := r.db.QueryContext(ctx, getRaceQueries()[racesGet], id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	races, err := r.scanRaces(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(races) == 0 {
+		return nil, ErrRaceNotFound
+	}
+	return races[0], nil
 }
 
 func (r *racesRepo) applyFilter(query string, opts ListRacesOptions) (string, []interface{}) {
