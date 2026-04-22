@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"google.golang.org/grpc/codes"
@@ -25,6 +26,9 @@ var allowedSortFields = map[string]struct{}{
 type Racing interface {
 	// ListRaces will return a collection of races.
 	ListRaces(ctx context.Context, in *racing.ListRacesRequest) (*racing.ListRacesResponse, error)
+
+	// GetRace returns a single race by ID, or codes.NotFound if it does not exist.
+	GetRace(ctx context.Context, in *racing.GetRaceRequest) (*racing.Race, error)
 }
 
 // racingService implements the Racing interface.
@@ -49,6 +53,17 @@ func (s *racingService) ListRaces(ctx context.Context, in *racing.ListRacesReque
 	}
 
 	return &racing.ListRacesResponse{Races: races}, nil
+}
+
+func (s *racingService) GetRace(ctx context.Context, in *racing.GetRaceRequest) (*racing.Race, error) {
+	race, err := s.racesRepo.Get(ctx, in.Id)
+	if err != nil {
+		if errors.Is(err, db.ErrRaceNotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return race, nil
 }
 
 // listRacesOptionsFromRequest validates the request and translates it into the

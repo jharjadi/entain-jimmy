@@ -66,6 +66,25 @@ func TestList_DerivesStatusFromStartTime(t *testing.T) {
 	assert.Equal(t, racing.RaceStatus_OPEN, races[1].Status)
 }
 
+func TestGet_ReturnsRaceWhenFound(t *testing.T) {
+	db := newTestDB(t)
+	insertRace(t, db, 42, 1, time.Now().Add(time.Hour))
+
+	repo := &racesRepo{db: db}
+	race, err := repo.Get(context.Background(), 42)
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), race.Id)
+}
+
+func TestGet_ReturnsSentinelWhenMissing(t *testing.T) {
+	db := newTestDB(t)
+
+	repo := &racesRepo{db: db}
+	race, err := repo.Get(context.Background(), 999)
+	assert.ErrorIs(t, err, ErrRaceNotFound)
+	assert.Nil(t, race)
+}
+
 func TestList_CustomSortByIdDesc(t *testing.T) {
 	db := newTestDB(t)
 	now := time.Now()

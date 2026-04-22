@@ -11,6 +11,10 @@ service Racing {
   rpc ListRaces(ListRacesRequest) returns (ListRacesResponse) {
     option (google.api.http) = { post: "/v1/list-races", body: "*" };
   }
+  // GetRace returns a single race by ID. 404 if not found, 500 on other errors.
+  rpc GetRace(GetRaceRequest) returns (Race) {
+    option (google.api.http) = { get: "/v1/races/{id}" };
+  }
 }
 
 /* Requests/Responses */
@@ -23,6 +27,12 @@ message ListRacesRequest {
 // Response to ListRaces call.
 message ListRacesResponse {
   repeated Race races = 1;
+}
+
+// Request for GetRace call.
+message GetRaceRequest {
+  // ID of the race to retrieve.
+  int64 id = 1;
 }
 
 // Filter for listing races.
