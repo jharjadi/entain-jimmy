@@ -115,8 +115,10 @@ func (x *ListRacesResponse) GetRaces() []*Race {
 
 // Filter for listing races.
 type ListRacesRequestFilter struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MeetingIds    []int64                `protobuf:"varint,1,rep,packed,name=meeting_ids,json=meetingIds,proto3" json:"meeting_ids,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	MeetingIds []int64                `protobuf:"varint,1,rep,packed,name=meeting_ids,json=meetingIds,proto3" json:"meeting_ids,omitempty"`
+	// When true, only races flagged visible are returned. Defaults to false (return all).
+	VisibleOnly   bool `protobuf:"varint,2,opt,name=visible_only,json=visibleOnly,proto3" json:"visible_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -156,6 +158,13 @@ func (x *ListRacesRequestFilter) GetMeetingIds() []int64 {
 		return x.MeetingIds
 	}
 	return nil
+}
+
+func (x *ListRacesRequestFilter) GetVisibleOnly() bool {
+	if x != nil {
+		return x.VisibleOnly
+	}
+	return false
 }
 
 // A race resource.
@@ -257,10 +266,11 @@ const file_racing_racing_proto_rawDesc = "" +
 	"\x10ListRacesRequest\x126\n" +
 	"\x06filter\x18\x01 \x01(\v2\x1e.racing.ListRacesRequestFilterR\x06filter\"7\n" +
 	"\x11ListRacesResponse\x12\"\n" +
-	"\x05races\x18\x01 \x03(\v2\f.racing.RaceR\x05races\"9\n" +
+	"\x05races\x18\x01 \x03(\v2\f.racing.RaceR\x05races\"\\\n" +
 	"\x16ListRacesRequestFilter\x12\x1f\n" +
 	"\vmeeting_ids\x18\x01 \x03(\x03R\n" +
-	"meetingIds\"\xcb\x01\n" +
+	"meetingIds\x12!\n" +
+	"\fvisible_only\x18\x02 \x01(\bR\vvisibleOnly\"\xcb\x01\n" +
 	"\x04Race\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1d\n" +
 	"\n" +
