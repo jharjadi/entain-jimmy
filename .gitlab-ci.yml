@@ -11,16 +11,19 @@ before_script:
   - apt-get update && apt-get install -y protobuf-compiler
   - export PATH="$PATH:$(go env GOPATH)/bin"
   - (cd racing && go install ${GENERATE_DEPS})
+  - (cd sports && go install ${GENERATE_DEPS})
   - (cd api && go install ${GENERATE_DEPS})
 
 test:
   stage: test
   script:
     - (cd racing && go test ./... -race -cover)
+    - (cd sports && go test ./... -race -cover)
     - (cd api && go test ./... -race -cover)
 
 build:
   stage: build
   script:
     - (cd racing && go build -buildvcs=false)
+    - (cd sports && go build -buildvcs=false)
     - (cd api && go build -buildvcs=false)

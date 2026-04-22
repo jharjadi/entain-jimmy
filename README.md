@@ -1,13 +1,14 @@
 ## Entain BE Technical Test
 
-This test has been designed to demonstrate your ability and understanding of technologies commonly used at Entain. 
+This test has been designed to demonstrate your ability and understanding of technologies commonly used at Entain.
 
 Please treat the services provided as if they would live in a real-world environment.
 
 ### Directory Structure
 
-- `api`: A basic REST gateway, forwarding requests onto service(s).
-- `racing`: A very bare-bones racing service.
+- `api`: REST gateway that forwards JSON requests onto the backing gRPC services.
+- `racing`: Racing service (gRPC on `:9000`, SQLite backend).
+- `sports`: Sports service (gRPC on `:9001`, SQLite backend).
 
 ```
 entain/
@@ -19,12 +20,19 @@ entain/
 │  ├─ proto/
 │  ├─ service/
 │  ├─ main.go
+├─ sports/
+│  ├─ db/
+│  ├─ proto/
+│  ├─ service/
+│  ├─ main.go
+├─ Makefile
+├─ NOTES.md
 ├─ README.md
 ```
 
 ### Getting Started
 
-1. Install Go (latest).
+1. Install Go (1.23+).
 
 ```bash
 brew install go
@@ -32,81 +40,92 @@ brew install go
 
 ... or [see here](https://golang.org/doc/install).
 
-2. Install `protoc`
+2. Install `protoc`.
 
-```
+```bash
 brew install protobuf
 ```
 
 ... or [see here](https://grpc.io/docs/protoc-installation/).
 
-2. In a terminal window, start our racing service...
+3. Install the proto generation tools (one-time).
 
 ```bash
-cd ./racing
-
-go build && ./racing
-➜ INFO[0000] gRPC server listening on: localhost:9000
+make install-tools
 ```
 
-3. In another terminal window, start our api service...
+4. Start all three services.
 
 ```bash
-cd ./api
-
-go build && ./api
-➜ INFO[0000] API server listening on: localhost:8000
+make run
 ```
 
-4. Make a request for races... 
+This backgrounds `racing` on `:9000`, `sports` on `:9001`, and the `api` gateway on `:8000`.
+Use `make kill` to stop them.
+
+### Example requests
+
+**List races** (default order: `advertised_start_time ASC`):
 
 ```bash
-curl -X "POST" "http://localhost:8000/v1/list-races" \
-     -H 'Content-Type: application/json' \
-     -d $'{
-  "filter": {}
-}'
+curl -s -X POST http://localhost:8000/v1/list-races \
+  -H 'Content-Type: application/json' \
+  -d '{"filter":{}}' | jq
 ```
 
-### Changes/Updates Required
+**Visible-only + custom sort:**
 
-- We'd like to see you push this repository up to **GitHub/Gitlab/Bitbucket** and lodge a **Pull/Merge Request for each** of the below tasks.
-- This means, we'd end up with **5x PR's** in total. **Each PR should target the previous**, so they build on one-another.
-- Alternatively you can merge each PR/MR after each other into master.
-- This will allow us to review your changes as well as we possibly can.
-- As your code will be reviewed by multiple people, it's preferred if the repository is **publicly accessible**. 
-- If making the repository public is not possible; you may choose to create a separate account or ask us for multiple email addresses which you can then add as viewers. 
-
-... and now to the test! Please complete the following tasks.
-
-1. Add another filter to the existing RPC, so we can call `ListRaces` asking for races that are visible only.
-   > We'd like to continue to be able to fetch all races regardless of their visibility, so try naming your filter as logically as possible. https://cloud.google.com/apis/design/standard_methods#list
-2. We'd like to see the races returned, ordered by their `advertised_start_time`
-   > Bonus points if you allow the consumer to specify an ORDER/SORT-BY they might be after. 
-3. Our races require a new `status` field that is derived based on their `advertised_start_time`'s. The status is simply, `OPEN` or `CLOSED`. All races that have an `advertised_start_time` in the past should reflect `CLOSED`. 
-   > There's a number of ways this could be implemented. Just have a go!
-4. Introduce a new RPC, that allows us to fetch a single race by its ID.
-   > This link here might help you on your way: https://cloud.google.com/apis/design/standard_methods#get
-5. Create a `sports` service that for sake of simplicity, implements a similar API to racing. This sports API can be called `ListEvents`. We'll leave it up to you to determine what you might think a sports event is made up off, but it should at minimum have an `id`, a `name` and an `advertised_start_time`.
-
-> Note: this should be a separate service, not bolted onto the existing racing service. At an extremely high-level, the diagram below attempts to provide a visual representation showing the separation of services needed and flow of requests.
-> 
-> ![](example.png)
-
-
-**Don't forget:**
-
-> Document and comment! Please make sure your work is appropriately documented/commented, so fellow developers know whats going on.
-
-**Note:**
-
-To aid in proto generation following any changes, you can run `go generate ./...` from `api` and `racing` directories.
-
-Before you do so, please ensure you have the following installed. You can simply run the following command below in each of `api` and `racing` directories.
-
+```bash
+curl -s -X POST http://localhost:8000/v1/list-races \
+  -H 'Content-Type: application/json' \
+  -d '{"filter":{"visible_only":true,"sort_by":"id","sort_direction":"DESC"}}' | jq
 ```
-go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2 google.golang.org/genproto/googleapis/api google.golang.org/grpc/cmd/protoc-gen-go-grpc google.golang.org/protobuf/cmd/protoc-gen-go
+
+**Invalid `sort_by` returns HTTP 400** (allowlist-validated in the service layer):
+
+```bash
+curl -si -X POST http://localhost:8000/v1/list-races \
+  -H 'Content-Type: application/json' \
+  -d '{"filter":{"sort_by":"DROP TABLE races"}}' | head -1
+# HTTP/1.1 400 Bad Request
 ```
+
+**Get a single race** (404 for genuinely missing ids, 500 for infrastructure errors):
+
+```bash
+curl -s http://localhost:8000/v1/races/1 | jq
+curl -si http://localhost:8000/v1/races/99999 | head -1
+# HTTP/1.1 404 Not Found
+```
+
+**List sports events:**
+
+```bash
+curl -s -X POST http://localhost:8000/v1/sports/events \
+  -H 'Content-Type: application/json' \
+  -d '{"filter":{"visible_only":true}}' | jq
+```
+
+### Development
+
+| Command          | Purpose                                                      |
+|------------------|--------------------------------------------------------------|
+| `make build`     | Build all three binaries                                     |
+| `make run`       | Background all three services                                |
+| `make kill`      | Kill whatever is bound to `:8000` / `:9000` / `:9001`        |
+| `make test`      | `go test ./... -race -cover` across all three modules        |
+| `make lint`      | `go vet ./...` across all three modules                      |
+| `make proto`     | Regenerate all `.pb.go` / `.pb.gw.go` stubs                  |
+
+### Tasks (per HR brief)
+
+1. **Visible-only filter** on `ListRaces` — `visible_only` bool on the filter; non-breaking.
+2. **Default ordering** by `advertised_start_time` with caller-configurable `sort_by` / `sort_direction`. Allowlist-validated; invalid values return HTTP 400.
+3. **Derived `status`** on `Race` (`OPEN` / `CLOSED`), computed at read time from `advertised_start_time` vs `now`.
+4. **`GetRace` RPC** with proper error classification (`NotFound` for missing ids, `Internal` for everything else — avoids the "every error is 404" trap).
+5. **Separate `sports` service** with its own module, port, DB, and gRPC server; gateway routes it at `POST /v1/sports/events`.
+
+See [NOTES.md](NOTES.md) for design decisions, trade-offs, and production-readiness gaps.
 
 ### Good Reading
 

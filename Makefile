@@ -10,14 +10,14 @@ install-tools:
 
 build:
 	cd racing && go build -o racing .
-	-cd sports && go build -o sports .
+	cd sports && go build -o sports .
 	cd api && go build -o api .
 
 run-racing:
 	cd racing && go run main.go &
 
 run-sports:
-	-cd sports && go run main.go &
+	cd sports && go run main.go &
 
 run-api:
 	cd api && go run main.go &
@@ -28,7 +28,7 @@ proto-racing:
 	cd racing && go generate ./proto/...
 
 proto-sports:
-	-cd sports && go generate ./proto/...
+	cd sports && go generate ./proto/...
 
 proto-api:
 	cd api && go generate ./proto/...
@@ -37,12 +37,12 @@ proto: proto-racing proto-sports proto-api
 
 test:
 	cd racing && go test ./... -race -cover
-	-cd sports && go test ./... -race -cover
+	cd sports && go test ./... -race -cover
 	cd api && go test ./... -race -cover
 
 lint:
 	cd racing && go vet ./...
-	-cd sports && go vet ./...
+	cd sports && go vet ./...
 	cd api && go vet ./...
 
 clean:
