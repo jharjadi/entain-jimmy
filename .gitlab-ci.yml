@@ -1,15 +1,26 @@
+image: golang:1.22
+
+stages:
+  - test
+  - build
+
 variables:
   GENERATE_DEPS: "github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2 google.golang.org/grpc/cmd/protoc-gen-go-grpc google.golang.org/protobuf/cmd/protoc-gen-go"
 
+before_script:
+  - apt-get update && apt-get install -y protobuf-compiler
+  - export PATH="$PATH:$(go env GOPATH)/bin"
+  - (cd racing && go install ${GENERATE_DEPS})
+  - (cd api && go install ${GENERATE_DEPS})
+
 test:
   stage: test
-  image: homebrew/brew
-  before_script:
-    - brew install gcc@5 go protobuf
-    - go env | grep GOPATH
-    - export PATH="$PATH:$(go env GOPATH)/bin"
-    - (cd racing && go install ${GENERATE_DEPS})
-    - (cd api && go install ${GENERATE_DEPS})
   script:
-    - "(cd racing && go generate ./... && go build -buildvcs=false)"
-    - "(cd api && go generate ./... && go build -buildvcs=false)"
+    - (cd racing && go test ./... -race -cover)
+    - (cd api && go test ./... -race -cover)
+
+build:
+  stage: build
+  script:
+    - (cd racing && go build -buildvcs=false)
+    - (cd api && go build -buildvcs=false)

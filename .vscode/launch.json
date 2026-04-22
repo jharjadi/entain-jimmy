@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Racing Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/racing",
+      "cwd": "${workspaceFolder}/racing"
+    },
+    {
+      "name": "Sports Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/sports",
+      "cwd": "${workspaceFolder}/sports"
+    },
+    {
+      "name": "API Gateway",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/api",
+      "cwd": "${workspaceFolder}/api"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "All Services",
+      "configurations": ["Racing Service", "Sports Service", "API Gateway"]
+    }
+  ]
+}

@@ -1,13 +1,14 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	_ "github.com/mattn/go-sqlite3"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"git.neds.sh/matty/entain/racing/proto/racing"
 )
@@ -18,7 +19,7 @@ type RacesRepo interface {
 	Init() error
 
 	// List will return a list of races.
-	List(filter *racing.ListRacesRequestFilter) ([]*racing.Race, error)
+	List(ctx context.Context, filter *racing.ListRacesRequestFilter) ([]*racing.Race, error)
 }
 
 type racesRepo struct {
@@ -43,23 +44,24 @@ func (r *racesRepo) Init() error {
 	return err
 }
 
-func (r *racesRepo) List(filter *racing.ListRacesRequestFilter) ([]*racing.Race, error) {
-	var (
-		err   error
-		query string
-		args  []interface{}
-	)
+func (r *racesRepo) List(ctx context.Context, filter *racing.ListRacesRequestFilter) ([]*racing.Race, error) {
+	query := getRaceQueries()[racesList]
+	query, args := r.applyFilter(query, filter)
 
-	query = getRaceQueries()[racesList]
-
-	query, args = r.applyFilter(query, filter)
-
-	rows, err := r.db.Query(query, args...)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	return r.scanRaces(rows)
+	races, err := r.scanRaces(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return races, nil
 }
 
 func (r *racesRepo) applyFilter(query string, filter *racing.ListRacesRequestFilter) (string, []interface{}) {
@@ -87,7 +89,7 @@ func (r *racesRepo) applyFilter(query string, filter *racing.ListRacesRequestFil
 	return query, args
 }
 
-func (m *racesRepo) scanRaces(
+func (r *racesRepo) scanRaces(
 	rows *sql.Rows,
 ) ([]*racing.Race, error) {
 	var races []*racing.Race
@@ -97,19 +99,10 @@ func (m *racesRepo) scanRaces(
 		var advertisedStart time.Time
 
 		if err := rows.Scan(&race.Id, &race.MeetingId, &race.Name, &race.Number, &race.Visible, &advertisedStart); err != nil {
-			if err == sql.ErrNoRows {
-				return nil, nil
-			}
-
 			return nil, err
 		}
 
-		ts, err := ptypes.TimestampProto(advertisedStart)
-		if err != nil {
-			return nil, err
-		}
-
-		race.AdvertisedStartTime = ts
+		race.AdvertisedStartTime = timestamppb.New(advertisedStart)
 
 		races = append(races, &race)
 	}
