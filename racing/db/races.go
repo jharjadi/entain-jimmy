@@ -19,8 +19,24 @@ type RacesRepo interface {
 	Init() error
 
 	// List will return a list of races.
-	List(ctx context.Context, filter *racing.ListRacesRequestFilter) ([]*racing.Race, error)
+	List(ctx context.Context, opts ListRacesOptions) ([]*racing.Race, error)
 }
+
+// ListRacesOptions is the pre-validated, transport-agnostic query input for List.
+// The service layer is responsible for validating SortBy against an allowlist; the
+// repo trusts SortBy and SortDirection and concatenates them into the ORDER BY
+// clause directly.
+type ListRacesOptions struct {
+	MeetingIDs    []int64
+	VisibleOnly   bool
+	SortBy        string // must be pre-validated; empty defaults to advertised_start_time
+	SortDirection string // "ASC" or "DESC"; empty defaults to ASC
+}
+
+const (
+	defaultSortField     = "advertised_start_time"
+	defaultSortDirection = "ASC"
+)
 
 type racesRepo struct {
 	db   *sql.DB
@@ -44,9 +60,9 @@ func (r *racesRepo) Init() error {
 	return err
 }
 
-func (r *racesRepo) List(ctx context.Context, filter *racing.ListRacesRequestFilter) ([]*racing.Race, error) {
+func (r *racesRepo) List(ctx context.Context, opts ListRacesOptions) ([]*racing.Race, error) {
 	query := getRaceQueries()[racesList]
-	query, args := r.applyFilter(query, filter)
+	query, args := r.applyFilter(query, opts)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -64,31 +80,37 @@ func (r *racesRepo) List(ctx context.Context, filter *racing.ListRacesRequestFil
 	return races, nil
 }
 
-func (r *racesRepo) applyFilter(query string, filter *racing.ListRacesRequestFilter) (string, []interface{}) {
+func (r *racesRepo) applyFilter(query string, opts ListRacesOptions) (string, []interface{}) {
 	var (
 		clauses []string
 		args    []interface{}
 	)
 
-	if filter == nil {
-		return query, args
-	}
+	if len(opts.MeetingIDs) > 0 {
+		clauses = append(clauses, "meeting_id IN ("+strings.Repeat("?,", len(opts.MeetingIDs)-1)+"?)")
 
-	if len(filter.MeetingIds) > 0 {
-		clauses = append(clauses, "meeting_id IN ("+strings.Repeat("?,", len(filter.MeetingIds)-1)+"?)")
-
-		for _, meetingID := range filter.MeetingIds {
+		for _, meetingID := range opts.MeetingIDs {
 			args = append(args, meetingID)
 		}
 	}
 
-	if filter.VisibleOnly {
+	if opts.VisibleOnly {
 		clauses = append(clauses, "visible = 1")
 	}
 
 	if len(clauses) != 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
+
+	field := defaultSortField
+	if opts.SortBy != "" {
+		field = opts.SortBy
+	}
+	direction := defaultSortDirection
+	if opts.SortDirection == "DESC" {
+		direction = "DESC"
+	}
+	query += " ORDER BY " + field + " " + direction
 
 	return query, args
 }

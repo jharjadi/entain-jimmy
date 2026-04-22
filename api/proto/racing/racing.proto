@@ -30,6 +30,17 @@ message ListRacesRequestFilter {
   repeated int64 meeting_ids = 1;
   // When true, only races flagged visible are returned. Defaults to false (return all).
   bool visible_only = 2;
+  // Field name to sort by. Empty defaults to advertised_start_time. Validated against
+  // a service-layer allowlist; invalid values return codes.InvalidArgument.
+  string sort_by = 3;
+  // Sort direction. Defaults to ASC.
+  SortDirection sort_direction = 4;
+}
+
+// Sort direction for ListRaces ordering.
+enum SortDirection {
+  ASC = 0;
+  DESC = 1;
 }
 
 /* Resources */
